@@ -6,12 +6,10 @@ from functools import lru_cache
 
 import pandas as pd
 import requests
-import yfinance as yf
 from requests.exceptions import SSLError
 
-# Yahoo's chart endpoint is faster and more reliable for this intraday workload.
-# The yfinance path remains available as an opt-in diagnostic fallback.
-_YFINANCE_HEALTHY = False
+# Yahoo's public chart endpoint avoids the native curl-cffi transport used by
+# yfinance, which is unnecessary here and can destabilize small cloud workers.
 
 
 def to_chart_timestamp(index, interval_seconds: int) -> int:
@@ -24,7 +22,7 @@ def to_chart_timestamp(index, interval_seconds: int) -> int:
 
 
 def get_intraday_data(ticker: str, period: str = "1d", interval: str = "5m", prepost: bool = True) -> pd.DataFrame:
-    """Fetch intraday candles, bypassing yfinance when its session becomes stale."""
+    """Fetch intraday candles from Yahoo's public chart endpoint."""
     bucket = int(time.time() // 5)
     return _get_intraday_cached(ticker.upper(), period, interval, prepost, bucket).copy()
 
@@ -51,16 +49,6 @@ def get_analysis_data(ticker: str, interval: str = "5m", prepost: bool = True) -
 
 @lru_cache(maxsize=256)
 def _get_intraday_cached(ticker: str, period: str, interval: str, prepost: bool, _bucket: int) -> pd.DataFrame:
-    global _YFINANCE_HEALTHY
-    if _YFINANCE_HEALTHY:
-        try:
-            data = yf.Ticker(ticker).history(period=period, interval=interval, prepost=prepost)
-            if not data.empty:
-                return data
-            _YFINANCE_HEALTHY = False
-        except Exception:
-            _YFINANCE_HEALTHY = False
-
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}"
     yahoo_interval = "1m" if interval == "3m" else interval
     request_options = {

@@ -54,7 +54,9 @@ def scan_watchlist() -> pd.DataFrame:
         pass
 
     # Network-bound symbol requests run together instead of serially.
-    with ThreadPoolExecutor(max_workers=min(10, len(WATCHLIST))) as pool:
+    # Four workers keep the free cloud container responsive while still making
+    # the network-bound scan substantially faster than a serial loop.
+    with ThreadPoolExecutor(max_workers=min(4, len(WATCHLIST))) as pool:
         results = list(pool.map(lambda symbol: _scan_symbol(symbol, spy_change), WATCHLIST))
     results = [result for result in results if result is not None]
     if not results:
