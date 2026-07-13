@@ -1,5 +1,5 @@
 streamlit==1.59.1
-pandas==3.0.3
-numpy==2.5.1
+pandas==2.2.3
+numpy==1.26.4
 requests>=2.32,<3
 polygon-api-client>=1.14,<2
