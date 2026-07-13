@@ -1,6 +1,7 @@
 from datetime import datetime
 from html import escape
 import json
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -38,7 +39,19 @@ def save_last_ticker(ticker: str) -> None:
         pass
 
 st.set_page_config(page_title="ApexFlow Trading Terminal", page_icon="▲", layout="wide", initial_sidebar_state="collapsed")
-ensure_live_proxy()
+
+
+def running_on_streamlit_cloud() -> bool:
+    """Keep the localhost chart bridge out of Streamlit's cloud process."""
+    return (
+        Path("/mount/src").exists()
+        or os.environ.get("STREAMLIT_SHARING_MODE", "").lower() == "streamlit"
+        or os.environ.get("STREAMLIT_RUNTIME_ENV", "").lower() == "cloud"
+    )
+
+
+if not running_on_streamlit_cloud():
+    ensure_live_proxy()
 
 st.markdown("""
 <style>
@@ -171,6 +184,8 @@ def show_trade_coach(ticker: str, interval: str) -> None:
 st.session_state.setdefault("chart_focus", None)
 st.session_state.setdefault("coach_positions", {})
 st.session_state.setdefault("coach_messages", {})
+st.session_state.setdefault("ticker_select", load_last_ticker())
+st.session_state.setdefault("interval_select", "5m")
 requested_symbol = st.query_params.get("symbol")
 requested_interval = st.query_params.get("interval")
 requested_focus = st.query_params.get("focus")
@@ -197,8 +212,8 @@ header_interval = st.session_state.get("interval_select", "5m").upper()
 st.markdown(f'<div class="terminal-head"><div class="brand"><b>▲ APEX</b>FLOW <span style="color:#607086;font-size:11px">AI TRADING TERMINAL</span></div><div class="status"><span class="live">● LIVE</span> &nbsp; {header_interval} DATA &nbsp; | &nbsp; {datetime.now():%I:%M:%S %p ET}</div></div>', unsafe_allow_html=True)
 with st.container(key="terminal_controls"):
     c1,c2,c3,c4,c5,c6=st.columns([1.0,.62,1.28,1.85,.66,.66],gap="small")
-    with c1: ticker=st.selectbox("SYMBOL",WATCHLIST,index=WATCHLIST.index(load_last_ticker()),key="ticker_select",on_change=ticker_changed,label_visibility="collapsed")
-    with c2: interval=st.selectbox("INTERVAL",["1m","3m","5m","15m","30m"],index=2,key="interval_select",on_change=clear_chart_focus,label_visibility="collapsed")
+    with c1: ticker=st.selectbox("SYMBOL",WATCHLIST,key="ticker_select",on_change=ticker_changed,label_visibility="collapsed")
+    with c2: interval=st.selectbox("INTERVAL",["1m","3m","5m","15m","30m"],key="interval_select",on_change=clear_chart_focus,label_visibility="collapsed")
     with c3: reference_choice=st.selectbox("REFERENCE",["Session open","Previous candle close","Recent swing high","VWAP"],label_visibility="collapsed")
     with c4: custom_threshold=st.slider("MOVE ALERT THRESHOLD (%)",.10,3.00,.50,.05,format="Alert ≥ %.2f%%",help="Creates an alert when the absolute price move reaches this percentage from the selected reference.",label_visibility="collapsed")
     with c5: coach_open=st.button("AI COACH",icon=":material/smart_toy:",width="stretch")
