@@ -1,5 +1,3 @@
-from concurrent.futures import ThreadPoolExecutor
-
 import pandas as pd
 
 from data_provider import get_analysis_data, get_intraday_data
@@ -53,11 +51,9 @@ def scan_watchlist() -> pd.DataFrame:
     except Exception:
         pass
 
-    # Network-bound symbol requests run together instead of serially.
-    # Four workers keep the free cloud container responsive while still making
-    # the network-bound scan substantially faster than a serial loop.
-    with ThreadPoolExecutor(max_workers=min(4, len(WATCHLIST))) as pool:
-        results = list(pool.map(lambda symbol: _scan_symbol(symbol, spy_change), WATCHLIST))
+    # Keep requests serial in the free cloud container. Concurrent SSL/network
+    # work inside Streamlit's script worker has caused native process crashes.
+    results = [_scan_symbol(symbol, spy_change) for symbol in WATCHLIST]
     results = [result for result in results if result is not None]
     if not results:
         return pd.DataFrame()
