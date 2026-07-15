@@ -21,6 +21,15 @@ GUIDES = {
     "Spinning Top": ("A small body with wicks on both sides shows uncertainty after two-way rejection.", "A break of its range; direction depends on trend context."),
 }
 
+GUIDES.update({
+    "Inverted Hammer": ("After a decline, buyers tested higher prices but did not yet control the close.", "A completed close above the inverted hammer high."),
+    "Hanging Man": ("After an advance, a deep intrabar selloff warns that support may be weakening.", "A completed close below the hanging man's low."),
+    "Piercing Line": ("Buyers recovered more than half of the prior bearish body after a decline.", "Follow-through above the piercing candle high."),
+    "Dark Cloud Cover": ("Sellers erased more than half of the prior bullish body after an advance.", "Follow-through below the dark-cloud candle low."),
+    "Tweezer Top": ("Two candles rejected approximately the same high after an advance.", "A completed close below the pair's low or nearby support."),
+    "Tweezer Bottom": ("Two candles rejected approximately the same low after a decline.", "A completed close above the pair's high or nearby resistance."),
+})
+
 # Values are normalized prices: (open, close, high, low). The last few bars
 # include surrounding context so the formation is understandable at a glance.
 SCHEMATICS = {
@@ -41,10 +50,21 @@ SCHEMATICS = {
     "Spinning Top": [(60,50,64,46),(53,49,72,31),(50,58,62,46)],
 }
 
+SCHEMATICS.update({
+    "Inverted Hammer": [(72,62,76,58),(62,58,25,56),(58,70,74,54)],
+    "Hanging Man": [(36,48,52,32),(49,53,57,84),(54,42,58,38)],
+    "Piercing Line": [(42,68,72,38),(70,51,74,47),(52,40,56,36)],
+    "Dark Cloud Cover": [(66,38,70,34),(36,55,59,32),(54,66,70,50)],
+    "Tweezer Top": [(52,34,28,56),(35,53,28,57),(54,66,70,50)],
+    "Tweezer Bottom": [(38,58,62,66),(59,41,63,66),(40,30,44,26)],
+})
+
 PATTERN_LENGTHS = {
     "Bullish Engulfing": 2, "Bearish Engulfing": 2, "Inside Bar": 2,
     "Outside Bar": 2, "Morning Star": 3, "Evening Star": 3,
     "Three White Soldiers": 3, "Three Black Crows": 3,
+    "Piercing Line": 2, "Dark Cloud Cover": 2,
+    "Tweezer Top": 2, "Tweezer Bottom": 2,
 }
 
 
@@ -113,12 +133,15 @@ def market_snapshot_svg(data: pd.DataFrame, name: str, pattern_time,
 
 
 def guide_html(name: str, bias: str, confirmation_needed: bool, lift: bool = False,
-               actual_svg: str | None = None, snapshot_label: str = "FORMATION GUIDE") -> str:
+               actual_svg: str | None = None, snapshot_label: str = "FORMATION GUIDE",
+               context_note: str = "") -> str:
     meaning, confirmation = GUIDES.get(name, ("A price-action formation requiring trend context.", "Wait for follow-through."))
     position_class = " tip-lift" if lift else ""
     bias_class = "bull" if "Bull" in bias else "bear" if "Bear" in bias else "neutral-tip"
     needed = "Needed" if confirmation_needed else "Pattern complete"
     diagram = actual_svg or snapshot_svg(name)
+    if context_note:
+        confirmation += f'<br><b>Context:</b> {context_note}'
     return (f'<div class="pattern-tip{position_class}"><div class="tip-head"><strong>{name}</strong>'
             f'<span class="{bias_class}">{bias.upper()}</span></div><div class="snapshot-label">{snapshot_label}</div>{diagram}'
             f'<div class="tip-meaning">{meaning}</div><div class="tip-confirm"><b>Confirmation · {needed}</b><br>{confirmation}</div></div>')

@@ -41,10 +41,12 @@ export default async function(component) {
   const errorLabel = parentElement.querySelector('.chart-error');
   if (!parentElement.__apexChart) symbolLabel.textContent = `${data.ticker} · ${data.interval.toUpperCase()} · EXTENDED HOURS`;
 
+  symbolLabel.textContent = `${data.ticker} - ${data.interval.toUpperCase()} - ${data.session_label}`;
   let state = parentElement.__apexChart;
   if (!state) {
     const localBridge = ['localhost','127.0.0.1','::1'].includes(window.location.hostname);
     parentElement.querySelector('.chart-status').textContent = localBridge ? '● YAHOO LIVE' : '● CLOUD 15S';
+    parentElement.querySelector('.chart-status').textContent = 'YAHOO FEED';
     const LC = await import('https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.3/+esm');
     const chart = LC.createChart(host, {
       width: host.clientWidth, height: 405,
@@ -104,6 +106,7 @@ export default async function(component) {
       state.resistanceLine.applyOptions({price:dataset.resistance}); state.supportLine.applyOptions({price:dataset.support});
       state.sessionRanges = dataset.sessions || []; state.lastTime = Number(dataset.candles.at(-1)?.time);
       symbolLabel.textContent = `${state.ticker} · ${state.interval.toUpperCase()} · EXTENDED HOURS`;
+      symbolLabel.textContent = `${state.ticker} - ${state.interval.toUpperCase()} - ${dataset.session_label}`;
       if (fitView) state.chart.timeScale().fitContent();
       requestAnimationFrame(state.drawSessionBands);
     };
@@ -171,8 +174,11 @@ export default async function(component) {
         if (Number.isFinite(state.lastTime) && incomingTime < state.lastTime) {
           errorLabel.style.display='none'; return;
         }
-        state.candles.update(point.candle); state.ema9.update(point.ema9); state.ema20.update(point.ema20);
-        state.vwap.update(point.vwap); state.volume.update(point.volume);
+        state.candles.update(point.candle);
+        if (point.ema9?.value != null && Number.isFinite(Number(point.ema9.value))) state.ema9.update(point.ema9);
+        if (point.ema20?.value != null && Number.isFinite(Number(point.ema20.value))) state.ema20.update(point.ema20);
+        if (point.vwap?.value != null && Number.isFinite(Number(point.vwap.value))) state.vwap.update(point.vwap);
+        if (point.volume?.value != null && Number.isFinite(Number(point.volume.value))) state.volume.update(point.volume);
         state.resistanceLine.applyOptions({price:point.resistance}); state.supportLine.applyOptions({price:point.support});
         state.lastTime = incomingTime; errorLabel.style.display='none';
       } catch (error) {
@@ -219,8 +225,11 @@ def render_live_chart(data: pd.DataFrame, ticker: str, support: float, resistanc
                     sessions.append({"kind": kind,
                         "start": to_chart_timestamp(frame.index[0], interval_seconds),
                         "end": to_chart_timestamp(frame.index[-1], interval_seconds)})
+    latest_minute = data.index[-1].hour * 60 + data.index[-1].minute if not data.empty else 0
+    session_label = "EXTENDED HOURS" if latest_minute < 570 or latest_minute >= 960 else "REGULAR HOURS"
     _live_chart(key="persistent-price-chart-v2", height=407, data={"ticker": ticker, "candles": list(candles.values()),
         "interval": interval, "interval_seconds": interval_seconds, "focus_time": focus_time,
+        "session_label": session_label,
         "ema9": _series(data, "EMA9", interval_seconds), "ema20": _series(data, "EMA20", interval_seconds),
         "vwap": _series(data, "VWAP", interval_seconds), "volume": list(volumes.values()),
         "support": support, "resistance": resistance, "sessions": sessions})

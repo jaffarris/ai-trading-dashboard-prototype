@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
@@ -11,6 +12,14 @@ from indicators import calculate_indicators, calculate_support_resistance
 
 _server: ThreadingHTTPServer | None = None
 INTERVAL_SECONDS = {"1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800}
+
+
+def _finite(value, fallback=None):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return fallback
+    return number if math.isfinite(number) else fallback
 
 
 def _history_payload(data, ticker: str, interval: str) -> dict:
@@ -79,15 +88,16 @@ class _Handler(BaseHTTPRequestHandler):
             interval_seconds = INTERVAL_SECONDS[interval]
             timestamp = to_chart_timestamp(data.index[-1], interval_seconds)
             bullish = float(row["Close"]) >= float(row["Open"])
-            volume_cap = max(1.0, float(data["Volume"].quantile(.95)))
+            volume_cap = max(1.0, _finite(data["Volume"].quantile(.95), 1.0))
+            volume = _finite(row["Volume"], 0.0)
             self._send({
                 "candle": {"time": timestamp, "open": float(row["Open"]), "high": float(row["High"]),
                            "low": float(row["Low"]), "close": float(row["Close"])},
-                "ema9": {"time": timestamp, "value": float(row["EMA9"])},
-                "ema20": {"time": timestamp, "value": float(row["EMA20"])},
-                "vwap": {"time": timestamp, "value": float(row["VWAP"])},
-                "volume": {"time": timestamp, "value": min(float(row["Volume"]), volume_cap),
-                           "actual": float(row["Volume"]),
+                "ema9": {"time": timestamp, "value": _finite(row["EMA9"])},
+                "ema20": {"time": timestamp, "value": _finite(row["EMA20"])},
+                "vwap": {"time": timestamp, "value": _finite(row["VWAP"])},
+                "volume": {"time": timestamp, "value": min(volume, volume_cap),
+                           "actual": volume,
                            "color": "rgba(37,214,149,.42)" if bullish else "rgba(255,92,114,.42)"},
                 "support": support, "resistance": resistance,
             })
@@ -100,7 +110,7 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
     def _send(self, payload: dict, status: int = 200):
-        body = json.dumps(payload).encode("utf-8")
+        body = json.dumps(payload, allow_nan=False).encode("utf-8")
         self.send_response(status)
         self._cors()
         self.send_header("Content-Type", "application/json")
