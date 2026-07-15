@@ -10,6 +10,7 @@ from requests.exceptions import SSLError
 
 # Yahoo's public chart endpoint avoids the native curl-cffi transport used by
 # yfinance, which is unnecessary here and can destabilize small cloud workers.
+_HTTP_SESSION = requests.Session()
 
 
 def to_chart_timestamp(index, interval_seconds: int) -> int:
@@ -23,7 +24,9 @@ def to_chart_timestamp(index, interval_seconds: int) -> int:
 
 def get_intraday_data(ticker: str, period: str = "1d", interval: str = "5m", prepost: bool = True) -> pd.DataFrame:
     """Fetch intraday candles from Yahoo's public chart endpoint."""
-    bucket = int(time.time() // 5)
+    # The UI refreshes every 15 seconds, so a shorter network cache only creates
+    # duplicate Yahoo requests without making the visible chart any fresher.
+    bucket = int(time.time() // 15)
     return _get_intraday_cached(ticker.upper(), period, interval, prepost, bucket).copy()
 
 
@@ -56,13 +59,13 @@ def _get_intraday_cached(ticker: str, period: str, interval: str, prepost: bool,
         "headers": {"User-Agent": "Mozilla/5.0"}, "timeout": 12,
     }
     try:
-        response = requests.get(url, **request_options)
+        response = _HTTP_SESSION.get(url, **request_options)
     except SSLError:
         # Some fresh Windows Python installs cannot see the Windows root store.
         # This fallback is restricted to Yahoo's public, read-only chart endpoint.
         import urllib3
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        response = requests.get(url, verify=False, **request_options)
+        response = _HTTP_SESSION.get(url, verify=False, **request_options)
     response.raise_for_status()
     payload = response.json().get("chart", {})
     if payload.get("error") or not payload.get("result"):

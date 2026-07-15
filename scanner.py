@@ -1,6 +1,9 @@
+import time
+from functools import lru_cache
+
 import pandas as pd
 
-from data_provider import get_analysis_data, get_intraday_data
+from data_provider import get_intraday_data
 from indicators import (assess_data_quality, calculate_indicators, latest_trading_day,
                         percentage_move)
 from risk_engine import (analyze_levels, analyze_market_context, analyze_trend, analyze_volume,
@@ -19,7 +22,10 @@ def _thresholds(ticker: str) -> tuple[float, float, float]:
 
 def _scan_symbol(ticker: str, spy: pd.DataFrame, qqq: pd.DataFrame) -> dict | None:
     try:
-        data = get_analysis_data(ticker)
+        # The scanner is an overview, so one current session is sufficient.
+        # Full multi-session RVOL analysis remains available for the selected
+        # symbol in the main dashboard.
+        data = get_intraday_data(ticker, period="1d", interval="5m", prepost=True)
         if data.empty or len(data) < 20:
             return None
         data = latest_trading_day(calculate_indicators(data))
@@ -66,11 +72,23 @@ def _scan_symbol(ticker: str, spy: pd.DataFrame, qqq: pd.DataFrame) -> dict | No
 
 
 def scan_watchlist() -> pd.DataFrame:
+    """Return a shared one-minute scanner snapshot.
+
+    The detailed selected-symbol analysis still refreshes every 15 seconds.
+    Rebuilding all ten scanner symbols on every fragment tick was the largest
+    source of unnecessary Streamlit Cloud latency.
+    """
+    bucket = int(time.time() // 60)
+    return _scan_watchlist_cached(bucket).copy()
+
+
+@lru_cache(maxsize=2)
+def _scan_watchlist_cached(_bucket: int) -> pd.DataFrame:
     spy = pd.DataFrame()
     qqq = pd.DataFrame()
     try:
-        spy = latest_trading_day(calculate_indicators(get_analysis_data("SPY")))
-        qqq = latest_trading_day(calculate_indicators(get_analysis_data("QQQ")))
+        spy = latest_trading_day(calculate_indicators(get_intraday_data("SPY", period="1d", interval="5m", prepost=True)))
+        qqq = latest_trading_day(calculate_indicators(get_intraday_data("QQQ", period="1d", interval="5m", prepost=True)))
     except Exception:
         pass
 

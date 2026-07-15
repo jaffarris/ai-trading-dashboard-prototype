@@ -383,7 +383,6 @@ def render_live_dashboard(ticker, interval, reference_choice, custom_threshold, 
     conflict_html=''.join(f'<div class="conflict-warning">SIGNAL CONFLICT - {escape(message)}</div>' for message in decision.get("conflicts",[]))
     if data_quality.get("warning"):
         warning_html=f'<div class="decision-warning">DATA WARNING - {escape(data_quality["warning"])}</div>'
-    scanner_df=scan_watchlist()
     st.markdown(
         f'<div class="decision-card"><div class="decision-item"><div class="decision-label">Trade now?</div><div class="decision-action {action_class}">{escape(display_action)}</div></div>'
         f'<div class="decision-item"><div class="decision-label">Trade readiness</div><div class="decision-value">{decision["trade_readiness"]}% · {decision["readiness_label"]}<br><span class="micro">Stock {decision["stock_score"]} · Trade {decision["trade_score"]}</span></div></div>'
@@ -391,18 +390,7 @@ def render_live_dashboard(ticker, interval, reference_choice, custom_threshold, 
         f'<div class="decision-item"><div class="decision-label">Invalidation level</div><div class="decision-value">{escape(decision["invalidation"])}</div></div>'
         f'<div class="decision-item"><div class="decision-label">First target</div><div class="decision-value">{escape(decision["first_target"])}<br><span class="micro">Risk: {escape(decision["main_risk"])}</span></div></div>'
         f'{warning_html}{conflict_html}</div>', unsafe_allow_html=True)
-    eligible_setups=scanner_df[(scanner_df["Trade Score"]>=75) & (scanner_df["Trade Readiness"]>=75)] if not scanner_df.empty else scanner_df
-    if not eligible_setups.empty:
-        best=eligible_setups.iloc[0]
-        best_html=(f'<div class="best-setup"><div class="best-cell best-title"><span>Today\'s best setup</span><b>{escape(str(best["Ticker"]))} · {escape(str(best["Signal"]))}</b></div>'
-                   f'<div class="best-cell"><span>Stock / trade score</span><b>{int(best["Stock Score"])}/{int(best["Trade Score"])} · {escape(str(best["Trade Quality"]))}</b></div>'
-                   f'<div class="best-cell"><span>Trade readiness</span><b>{int(best["Trade Readiness"])}%</b></div>'
-                   f'<div class="best-cell"><span>Expected continuation</span><b>{float(best["Expected Continuation"]):+.2f}%</b></div>'
-                   f'<div class="best-cell"><span>Trend / momentum</span><b>{int(best["Trend Strength"])} / {int(best["Momentum"])}</b></div>'
-                   f'<div class="best-cell"><span>Risk reward</span><b>{float(best["Risk Reward"]):.1f}:1 · chain required</b></div></div>')
-    else:
-        best_html='<div class="best-setup"><div class="best-cell best-title"><span>Today\'s best setup</span><b>NO READY HIGH-QUALITY SETUP</b></div><div class="best-cell" style="grid-column:span 5"><span>Action</span><b>Protect capital · require trade score and readiness of at least 75</b></div></div>'
-    st.markdown(best_html,unsafe_allow_html=True)
+    best_slot=st.empty()
     pattern_name=decision.get("pattern",{}).get("name","No clear pattern"); pattern_bias=decision.get("pattern",{}).get("bias","Neutral")
     if decision.get("pattern",{}).get("status")=="FORMING": pattern_name=f"Forming {pattern_name}"
     tiles=[metric("Current Price",f"${latest:,.2f}",ticker,"cyan"),metric("Move %",f"{move_pct:+.2f}%",f"{move_class['label']} · {move_class['score']}%",tone(move_pct)),metric("Pullback %",f"{pullback_pct:+.2f}%","20-bar high",tone(pullback_pct)),metric("Stock Score",f"{decision['stock_score']}/100","Is the stock good?","up" if decision["stock_score"]>=75 else "down" if decision["stock_score"]<50 else "neutral"),metric("Trade Score",f"{decision['trade_score']}/100","Is the setup good?","up" if decision["trade_score"]>=75 else "down" if decision["trade_score"]<50 else "neutral"),metric("Readiness",f"{decision['trade_readiness']}%",decision["readiness_label"],"up" if decision["trade_readiness"]>=75 else "down" if decision["trade_readiness"]<50 else "neutral"),metric("RVOL-TOD",f"{rvol:.2f}×" if rvol else "N/A",f"{volume['quality']} · {decision['components']['Volume Intelligence']}/100","up" if 2<=rvol<=4 else "down" if rvol<.7 else "neutral"),metric("Market",direction,f"Alignment {decision['components']['Market Alignment']}/100","up" if direction=="BULLISH" else "down" if direction=="BEARISH" else "neutral"),metric("Setup Quality",decision["classification"],f"Grade {decision['grade']} · RR {expected['risk_reward']:.1f}:1","cyan"),metric("Candlestick",pattern_name,pattern_bias,"up" if pattern_bias=="Bullish" else "down" if pattern_bias=="Bearish" else "neutral")]
@@ -422,6 +410,20 @@ def render_live_dashboard(ticker, interval, reference_choice, custom_threshold, 
         f'<div class="context-item" title="Continuation {expected["continuation"]}% · Pullback {expected["pullback"]}% · Reversal {expected["reversal"]}%"><span>Expected move (heuristic)</span><b>Remain {expected["remaining_move"]:+.2f}% · {escape(expected["estimated_time"])}</b></div>'
         f'<div class="context-item"><span>Risk controls</span><b>{escape(lock_text)} · RR {expected["risk_reward"]:.1f}:1 · {escape(decision["classification"])}</b></div></div>',
         unsafe_allow_html=True)
+
+    scanner_df=scan_watchlist()
+    eligible_setups=scanner_df[(scanner_df["Trade Score"]>=75) & (scanner_df["Trade Readiness"]>=75)] if not scanner_df.empty else scanner_df
+    if not eligible_setups.empty:
+        best=eligible_setups.iloc[0]
+        best_html=(f'<div class="best-setup"><div class="best-cell best-title"><span>Today\'s best setup</span><b>{escape(str(best["Ticker"]))} · {escape(str(best["Signal"]))}</b></div>'
+                   f'<div class="best-cell"><span>Stock / trade score</span><b>{int(best["Stock Score"])}/{int(best["Trade Score"])} · {escape(str(best["Trade Quality"]))}</b></div>'
+                   f'<div class="best-cell"><span>Trade readiness</span><b>{int(best["Trade Readiness"])}%</b></div>'
+                   f'<div class="best-cell"><span>Expected continuation</span><b>{float(best["Expected Continuation"]):+.2f}%</b></div>'
+                   f'<div class="best-cell"><span>Trend / momentum</span><b>{int(best["Trend Strength"])} / {int(best["Momentum"])}</b></div>'
+                   f'<div class="best-cell"><span>Risk reward</span><b>{float(best["Risk Reward"]):.1f}:1 · chain required</b></div></div>')
+    else:
+        best_html='<div class="best-setup"><div class="best-cell best-title"><span>Today\'s best setup</span><b>NO READY HIGH-QUALITY SETUP</b></div><div class="best-cell" style="grid-column:span 5"><span>Action</span><b>Protect capital · require trade score and readiness of at least 75</b></div></div>'
+    best_slot.markdown(best_html,unsafe_allow_html=True)
 
     left,center,right=st.columns([1.18,2.55,1.47],gap="small")
     with left:
